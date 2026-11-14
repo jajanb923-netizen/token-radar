@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — pre-token protocols ranked by implied value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#board">Skip to the board</a>
+<header class="top">
+  <div class="wrap">
+    <p class="kicker">Token Radar · model radar-2</p>
+    <h1>Protocols without a token, ranked by implied value</h1>
+    <p class="lede">Every pre-token protocol in the snapshot, scored from its own figures — TVL, seven-day
+    growth, and how long it has run with no token. The 40-protocol watchlist is the floor; the radar
+    adds the strongest pre-token protocols below it. Click any row for its farm plan.</p>
+    <dl class="stats" id="stats"></dl>
+  </div>
+</header>
+<main class="wrap" id="board">
+  <section class="controls" aria-label="Board controls">
+    <div class="tabs" role="tablist" aria-label="Board or live tokens">
+      <button id="tab-board" class="tab active" role="tab" aria-selected="true">Board</button>
+      <button id="tab-live" class="tab" role="tab" aria-selected="false">Live tokens</button>
+    </div>
+    <label class="search">Search
+      <input id="q" type="search" placeholder="Name, slug, category or chain…" autocomplete="off">
+    </label>
+    <label class="cat">Category
+      <select id="cat"><option value="">All categories</option></select>
+    </label>
+    <label class="check"><input id="watch" type="checkbox"> Watchlist only</label>
+  </section>
+  <p class="hint" id="hint"></p>
+  <div class="tablewrap">
+    <table id="grid">
+      <thead><tr>
+        <th data-sort="rank" aria-sort="ascending">Rank</th>
+        <th data-sort="name">Protocol</th>
+        <th data-sort="category">Category</th>
+        <th data-sort="chains">Chains</th>
+        <th data-sort="tvl_usd" class="num">TVL</th>
+        <th data-sort="change_7d" class="num">7d</th>
+        <th data-sort="age_days" class="num">Age</th>
+        <th data-sort="implied_value_usd" class="num">Implied value</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <table id="livegrid" hidden>
+      <thead><tr>
+        <th>Protocol</th><th>Category</th><th>Chains</th>
+        <th class="num">TVL</th><th class="num">Market cap</th><th class="num">7d</th>
+      </tr></thead>
+      <tbody id="liverows"></tbody>
+    </table>
+  </div>
+  <p class="count" id="count"></p>
+</main>
+<section class="wrap model" aria-label="How the value is worked out">
+  <h2>How the implied value is worked out</h2>
+  <p>Every row is scored by the same formula, from the snapshot's own figures. No protocol is
+  special-cased by name.</p>
+  <pre id="formula"></pre>
+  <p class="fine" id="modelnote"></p>
+</section>
+<footer class="wrap fine">
+  <p id="source"></p>
+  <p>Live-token protocols are shown apart, at the market's own values — a token that already trades is
+  not a token still to come. Farm plans are a reader's checklist, not financial advice; check every
+  protocol's own page before you send it money.</p>
+</footer>
+<div class="detail" id="detail" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dname">
+    <button class="close" id="dclose" aria-label="Close detail">×</button>
+    <div id="dcontent"></div>
+  </div>
+</div>
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
