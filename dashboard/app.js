@@ -215,12 +215,14 @@
     openSlug = slug;
     var g = pct(r.change_7d);
     var m = r.model;
+    var calSrc = m.calibration_source === 'category'
+      ? 'category median, ' + m.calibration_n + ' live protocol' + (m.calibration_n === 1 ? '' : 's')
+      : 'global median fallback, ' + m.calibration_n + ' live protocols';
     var modelLines = [
-      'base       = TVL ' + moneyFull(r.tvl_usd) + ' × ' + m.base_multiple + ' = ' + moneyFull(r.tvl_usd * m.base_multiple),
+      'base       = TVL ' + moneyFull(r.tvl_usd) + ' × ' + m.base_multiple + ' = ' + moneyFull(r.tvl_usd * m.base_multiple) + '  (' + calSrc + ')',
       'growth     = ' + (r.change_7d == null ? 'no 7d change' : m.growth_pct + '%') + ' → ×' + m.growth_multiplier,
       'maturity   = ' + (m.age_days == null ? 'age unknown (365d)' : m.age_days + ' days') + ' → ×' + m.maturity_multiplier,
       'watchlist  = ' + (r.watchlist ? 'on the watchlist' : 'below the floor') + ' → ×' + m.watchlist_multiplier,
-      'category   = ' + (r.category || 'none') + ' → ×' + m.category_multiplier,
       'chains     = ' + r.chains.length + ' chain' + (r.chains.length === 1 ? '' : 's') + ' → ×' + m.chain_multiplier,
       'implied    = ' + moneyFull(r.implied_value_usd),
     ].join('\n');
@@ -358,20 +360,53 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDetail(); });
   window.addEventListener('hashchange', function () { if (!applyingHash) applyHash(); });
 
+  function renderCalib() {
+    var cal = R.calibration;
+    if (!cal) return;
+    var onBoard = {};
+    R.rows.forEach(function (r) { if (r.category) onBoard[r.category] = true; });
+    var entries = cal.categories.filter(function (e) { return onBoard[e.category]; })
+      .sort(function (a, b) { return b.multiple - a.multiple; });
+    document.getElementById('calibnote').textContent =
+      'Calibrated from the snapshot’s own live tokens: each category’s base multiple is the median ' +
+      'market-cap-to-TVL ratio of its live-token protocols (a recorded market cap of zero is no price ' +
+      'at all, so it is left out). A category needs at least ' + cal.min_live_count + ' live protocols; ' +
+      'the global median ' + cal.global_median + ' across ' + cal.global_live_count + ' live protocols ' +
+      'is the fallback for every other category. Every multiple is capped to ' + cal.multiple_floor + '–' + cal.multiple_cap + ' ' +
+      'so one outlier cannot dominate. The table lists the categories on this board; the rest take the global fallback.';
+    var rows = entries.map(function (e) {
+      return '<tr><td>' + esc(e.category) + '</td>' +
+        '<td class="num">' + e.live_count + '</td>' +
+        '<td class="num">' + e.median.toFixed(4) + '</td>' +
+        '<td class="num"><b>' + e.multiple.toFixed(4) + '</b></td></tr>';
+    }).join('');
+    rows += '<tr><td>Global fallback (every other category)</td>' +
+      '<td class="num">' + cal.global_live_count + '</td>' +
+      '<td class="num">' + cal.global_median.toFixed(4) + '</td>' +
+      '<td class="num"><b>' + cal.global_multiple.toFixed(4) + '</b></td></tr>';
+    document.getElementById('calibtable').innerHTML =
+      '<thead><tr><th>Category</th><th class="num">Live protocols</th><th class="num">Median mcap / TVL</th><th class="num">Base multiple</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>';
+  }
+
   // ------------------------------------------------------------ model notes and boot
 
   document.getElementById('formula').textContent =
-    'implied = TVL × 0.25 × growth × maturity × watchlist × category × chains\n' +
+    'implied = TVL × base multiple × growth × maturity × watchlist × chains\n' +
+    '  base multiple = median market-cap / TVL of the live-token protocols in the\n' +
+    '                  protocol’s category (at least 2 live, else the global median),\n' +
+    '                  capped to 0.05–2.00; it carries the category effect, so there\n' +
+    '                  is no separate category multiplier\n' +
     '  growth    = 1 + clamp(7d change, −50%, +150%) × 0.55\n' +
     '  maturity  = 0.55 + min(age, 1460 days) / 1460 × 0.55   (unknown age: 365 days)\n' +
     '  watchlist = ×1.30 on the watchlist, ×1.00 below it\n' +
-    '  category  = ×1.15 token-launch categories, ×0.90 infrastructure, ×1.00 otherwise\n' +
     '  chains    = 1 + min(chains − 1, 4) × 0.03';
   document.getElementById('modelnote').textContent =
     'The watchlist is the snapshot’s own floor: at least $50M of TVL, no token, and not a wrapped, ' +
     'staked or bridged product of a token that trades. The board ranks the watchlist plus the ' +
-    R.early_size + ' strongest pre-token protocols below it, by implied value. Live-token protocols are ' +
-    'set aside at the market’s own values.';
+    R.early_size + ' strongest pre-token protocols below it, by implied value. The base multiple is ' +
+    'recomputed from the snapshot’s live tokens on every run — no protocol and no category is priced ' +
+    'by a hand-written number. Live-token protocols are set aside at the market’s own values.';
   document.getElementById('source').textContent =
     'Source: DefiLlama protocol snapshot, ' + R.as_of + '. ' + R.rows.length + ' protocols on the board ' +
     'from ' + R.watchlist_size + ' watchlist slugs and ' + R.early_size + ' early rows; ' +
@@ -379,5 +414,6 @@
 
   renderStats();
   renderCats();
+  renderCalib();
   if (location.hash) applyHash(); else renderAll();
 })();

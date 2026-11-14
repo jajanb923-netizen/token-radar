@@ -128,7 +128,15 @@ tbody tr:last-child td { border-bottom: 0; }
 .count { color: var(--faint); font-size: 13px; margin: 12px 2px 0; }
 .model { margin-top: 30px; padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .model h2 { margin: 0 0 8px; font-size: 20px; }
+.model h3 { margin: 18px 0 8px; font-size: 15px; }
 .model p { color: var(--muted); margin: 0 0 12px; max-width: 76ch; }
+.calibwrap { overflow-x: auto; margin: 0 0 12px; border: 1px solid var(--line); border-radius: 8px; }
+.calibwrap table { font-size: 13.5px; }
+.calibwrap thead th { position: static; padding: 9px 12px; }
+.calibwrap tbody td { padding: 7px 12px; cursor: default; }
+.calibwrap tbody tr { cursor: default; }
+.calibwrap tbody tr:hover td { background: transparent; }
+.calibwrap td.num, .calibwrap th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .model pre {
   margin: 0; padding: 14px 16px; overflow-x: auto;
   background: #0a0d11; border: 1px solid var(--line); border-radius: 8px;
