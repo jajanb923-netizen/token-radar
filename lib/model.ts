@@ -1,4 +1,4 @@
-// The token radar's model, version 3: one snapshot of the protocol universe in, one ranked board out.
+// The token radar's model, version 4: one snapshot of the protocol universe in, one ranked board out.
 //
 // The board covers every slug in the snapshot's watchlist (the floor, never a ceiling) and adds the
 // strongest pre-token protocols below the floor by implied value, not by TVL alone. A protocol is
@@ -16,10 +16,17 @@
 //                 present and positive; a recorded market cap of zero is no price at all, so it
 //                 carries no signal). A category needs at least 2 live protocols to earn its own
 //                 multiple; fewer than that, and a category with no live protocol at all, falls back
-//                 to the global median across all live protocols. Every multiple is capped into
-//                 [0.05, 2.0] so one outlier cannot dominate. Because the calibrated multiple now
-//                 carries the category effect, there is NO separate category multiplier: adding one
-//                 would double-count the same signal.
+//                 to the global median across all live protocols. But a median from two protocols is
+//                 a noisy estimate — the ratio spread runs from 0.0003 to 400.2 across the 128 live
+//                 protocols, and 8 of the 22 calibrated categories have exactly 2 live protocols —
+//                 so the category median is SHRUNK toward the global median before it is used:
+//                 multiple = (n x category median + k x global median) / (n + k), with k = 2. At
+//                 the thinnest n = 2 the estimate is half category, half global; at n = 15 it is
+//                 88% the category's own median, so well-measured categories barely move while the
+//                 thinnest ones are pulled decisively toward the market. Every multiple is capped
+//                 into [0.05, 2.0] after shrinking, so one outlier cannot dominate. Because the
+//                 calibrated multiple now carries the category effect, there is NO separate category
+//                 multiplier: adding one would double-count the same signal.
 //   growth      = clamp(change_7d, -50, 150) per cent           (a 4448% week is capped: one spike
 //                                                                must not outrank a whole protocol)
 //   growthMult  = 1 + (growth / 100) x GROWTH_WEIGHT           (0.55; growth is a signal, not a
@@ -41,12 +48,14 @@
 //   implied     = max(1, round(base x growthMult x maturity x watchlist x chains))
 //
 // On this snapshot the calibration finds 128 live protocols with a positive market cap. The global
-// median is 0.2138. Category medians run from 0.05 (Liquid Staking, Restaking, Onchain Capital
-// Allocator, Staking Pool — all floored) to 2.0 (Derivatives, Token Locker — both capped), with Dexs
-// at 0.3424, RWA at 0.2748, Basis Trading at 0.6544, Canonical Bridge at 0.7464 and Cross Chain
-// Bridge at 1.2205. Nine categories on the board have no live protocol at all, so they take the
-// global fallback. The calibration is recomputed from the snapshot on every run: nothing in it is a
-// hard-coded number about a protocol or a category.
+// median is 0.2138. After shrinkage the base multiples run from 0.0721 (Liquid Staking) to 2.0
+// (Token Locker, still capped — its raw median is 9.5204 from only 2 live protocols), with Dexs at
+// 0.3226, RWA at 0.2637, Basis Trading at 0.5565, Canonical Bridge at 0.6399 and Cross Chain Bridge
+// at 0.8849. The thinnest categories move the most: Derivatives 2.1619 to 1.1879, Staking Pool
+// 0.0018 to 0.1078, Onchain Capital Allocator 0.0125 to 0.1132 — none of them sits on the floor or
+// the cap because of two protocols alone any more. Nine categories on the board have no live
+// protocol at all, so they take the global fallback. The calibration is recomputed from the snapshot
+// on every run: nothing in it is a hard-coded number about a protocol or a category.
 //
 // Farm plans are derived from the same record: the protocol's category picks the plan's actions, its
 // TVL sets the capital, its age sets the hold, its primary chain sets where the work happens, and a
@@ -105,7 +114,7 @@ export const MODEL: ModelConstants = {
 };
 
 /** The model's version label: the dashboard names it and the rules quote it. */
-export const MODEL_VERSION = 'radar-3';
+export const MODEL_VERSION = 'radar-4';
 
 /** How many pre-token protocols below the watchlist floor the early radar carries, by implied value. */
 export const EARLY_ROWS = 160;
@@ -115,6 +124,13 @@ export const LIVE_ROWS = 24;
 
 /** A live protocol counts toward the calibration only when both figures are present and positive. */
 export const CALIBRATION_MIN_LIVE = 2;
+
+/** The shrinkage pseudo-count: each category's median is blended with this many observations at the
+ * global median. k = 2 is the size of the smallest calibrated sample, so the thinnest category (n = 2)
+ * is weighted exactly half on its own median and half on the global one; a category with 15 live
+ * protocols keeps 88% of its own median. Smaller k leaves a two-protocol median in charge; larger k
+ * drags even well-measured categories toward the global median and flattens the ranking. */
+export const SHRINKAGE_K = 2;
 
 /** The band every calibrated multiple is capped into, so one outlier cannot dominate. */
 export const CALIBRATION_FLOOR = 0.05;
@@ -134,6 +150,7 @@ export interface Calibration {
   global_median: number;
   global_live_count: number;
   min_live_count: number;
+  shrinkage_k: number;
   multiple_floor: number;
   multiple_cap: number;
   categories: CalibrationEntry[];
@@ -244,8 +261,11 @@ function clampMultiple(x: number): number {
  * Calibrate the base multiple from the snapshot's own live tokens. A live protocol counts when its
  * market cap and its TVL are both present and positive: a recorded market cap of zero is no price at
  * all, so it carries no signal and is left out. Each category with at least CALIBRATION_MIN_LIVE
- * live protocols earns its own multiple, the median market-cap-to-TVL ratio of those protocols,
- * capped into [CALIBRATION_FLOOR, CALIBRATION_CAP]. Every other category takes the global median
+ * live protocols earns its own multiple — but not its raw median: the median is shrunk toward the
+ * global median first, multiple = (n x median + SHRINKAGE_K x global median) / (n + SHRINKAGE_K),
+ * then capped into [CALIBRATION_FLOOR, CALIBRATION_CAP]. A median from two protocols is a noisy
+ * estimate of a heavy-tailed ratio, so the shrinkage pulls the thinnest categories halfway to the
+ * market while leaving well-measured ones nearly alone. Every other category takes the global median
  * across all live protocols, capped the same way. The result is recomputed on every run.
  */
 export function calibrate(snapshot: Snapshot): Calibration {
@@ -264,13 +284,15 @@ export function calibrate(snapshot: Snapshot): Calibration {
   for (const [category, ratios] of [...byCategory.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
     if (ratios.length < CALIBRATION_MIN_LIVE) continue;
     const med = median(ratios);
-    categories.push({ category, multiple: round4(clampMultiple(med)), median: round4(med), live_count: ratios.length });
+    const shrunk = (ratios.length * med + SHRINKAGE_K * globalMedian) / (ratios.length + SHRINKAGE_K);
+    categories.push({ category, multiple: round4(clampMultiple(shrunk)), median: round4(med), live_count: ratios.length });
   }
   return {
     global_multiple: round4(clampMultiple(globalMedian)),
     global_median: round4(globalMedian),
     global_live_count: live.length,
     min_live_count: CALIBRATION_MIN_LIVE,
+    shrinkage_k: SHRINKAGE_K,
     multiple_floor: CALIBRATION_FLOOR,
     multiple_cap: CALIBRATION_CAP,
     categories,

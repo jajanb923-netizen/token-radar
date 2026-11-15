@@ -368,9 +368,12 @@
     var entries = cal.categories.filter(function (e) { return onBoard[e.category]; })
       .sort(function (a, b) { return b.multiple - a.multiple; });
     document.getElementById('calibnote').textContent =
-      'Calibrated from the snapshot’s own live tokens: each category’s base multiple is the median ' +
+      'Calibrated from the snapshot’s own live tokens: each category’s base multiple starts as the median ' +
       'market-cap-to-TVL ratio of its live-token protocols (a recorded market cap of zero is no price ' +
-      'at all, so it is left out). A category needs at least ' + cal.min_live_count + ' live protocols; ' +
+      'at all, so it is left out), then is shrunk toward the global median: (n × median + ' + cal.shrinkage_k + ' × global median) / ' +
+      '(n + ' + cal.shrinkage_k + '), where n is the category’s live count. A median from two protocols is a noisy ' +
+      'estimate, so the thinnest categories are weighted half on their own median and half on the market, ' +
+      'while well-measured ones keep most of their own. A category needs at least ' + cal.min_live_count + ' live protocols; ' +
       'the global median ' + cal.global_median + ' across ' + cal.global_live_count + ' live protocols ' +
       'is the fallback for every other category. Every multiple is capped to ' + cal.multiple_floor + '–' + cal.multiple_cap + ' ' +
       'so one outlier cannot dominate. The table lists the categories on this board; the rest take the global fallback.';
@@ -393,10 +396,11 @@
 
   document.getElementById('formula').textContent =
     'implied = TVL × base multiple × growth × maturity × watchlist × chains\n' +
-    '  base multiple = median market-cap / TVL of the live-token protocols in the\n' +
-    '                  protocol’s category (at least 2 live, else the global median),\n' +
-    '                  capped to 0.05–2.00; it carries the category effect, so there\n' +
-    '                  is no separate category multiplier\n' +
+    '  base multiple = category median market-cap / TVL, shrunk toward the global\n' +
+    '                  median: (n × median + 2 × global median) / (n + 2), where n is\n' +
+    '                  the category’s live count (at least 2 live, else the global\n' +
+    '                  median), capped to 0.05–2.00; it carries the category effect,\n' +
+    '                  so there is no separate category multiplier\n' +
     '  growth    = 1 + clamp(7d change, −50%, +150%) × 0.55\n' +
     '  maturity  = 0.55 + min(age, 1460 days) / 1460 × 0.55   (unknown age: 365 days)\n' +
     '  watchlist = ×1.30 on the watchlist, ×1.00 below it\n' +
